@@ -1,0 +1,4 @@
+name: zmk-studio-log
+build:
+  cmake: .
+  kconfig: Kconfig

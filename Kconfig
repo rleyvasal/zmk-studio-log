@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: MIT
+
+menuconfig ZMK_STUDIO_LOG
+	bool "Stream firmware logs to the configurator over the ZMK Studio connection"
+	depends on ZMK_STUDIO
+	help
+	  Captures printk() and, when logging is enabled, Zephyr LOG_* output, and
+	  sends each line to a connected configurator as an 'L' raw frame on the
+	  Studio RPC transport, so no second serial port is needed. Nothing is sent
+	  until the host turns the stream on with a 'C' '1' frame.
+
+	  Requires a ZMK tree with zmk_rpc_send_raw_frame(); see
+	  patches/0001-studio-raw-frames.patch in this module.
+
+if ZMK_STUDIO_LOG
+
+config ZMK_STUDIO_LOG_LINE_MAX
+	int "Longest log line, in bytes"
+	default 120
+	range 32 200
+	help
+	  Longer lines are split. Each queued or retained line uses this much RAM.
+
+config ZMK_STUDIO_LOG_HISTORY
+	int "Lines kept for replay when the configurator connects"
+	default 32
+	range 0 128
+	help
+	  The most recent lines are kept even while the stream is off, and are
+	  replayed when the host turns it on, so boot messages are not lost.
+
+config ZMK_STUDIO_LOG_QUEUE
+	int "Lines queued for sending while the stream is on"
+	default 16
+	range 4 128
+	help
+	  Lines arriving faster than USB drains them are dropped once this fills.
+
+config ZMK_STUDIO_LOG_PRINTK
+	bool "Capture printk()"
+	default y
+	help
+	  Installs a printk character hook. Other printk output (for example a
+	  UART console) is replaced by this hook, so leave it off if you rely on
+	  one. Has no effect when CONFIG_LOG_PRINTK routes printk into logging;
+	  enable ZMK_STUDIO_LOG_BACKEND instead.
+
+config ZMK_STUDIO_LOG_BACKEND
+	bool "Capture Zephyr logging (LOG_INF, LOG_WRN, ...)"
+	default y
+	depends on LOG && !LOG_MODE_MINIMAL
+	select LOG_OUTPUT
+	help
+	  Registers a log backend that formats each message as text. Choose which
+	  messages reach it with the usual CONFIG_*_LOG_LEVEL options.
+
+config ZMK_STUDIO_LOG_USB_ONLY
+	bool "Only stream when Studio is connected over USB"
+	default y
+	help
+	  Keeps log frames off Bluetooth, where they would compete with keyboard
+	  HID reports for airtime.
+
+endif
