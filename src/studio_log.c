@@ -18,6 +18,7 @@
 
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
+#include <zephyr/linker/section_tags.h>
 #include <zephyr/spinlock.h>
 #include <zephyr/sys/printk.h>
 
@@ -38,6 +39,8 @@
 
 #include <zmk_studio_log/studio_log.h>
 
+#include "internal.h"
+
 #ifndef ZMK_RPC_RAW_FRAME_HANDLER
 #error                                                                                             \
     "zmk-studio-log needs a ZMK with Studio raw frames; apply patches/0001-studio-raw-frames.patch"
@@ -55,10 +58,24 @@ static char assembling[LINE_MAX];
 static size_t assembling_len;
 
 #if HISTORY_LEN > 0
-/* Line number n (counting every committed line) lives in history[n % HISTORY_LEN] until it is
- * overwritten; history_next is the number the next committed line gets. */
-static char history[HISTORY_LEN][LINE_MAX];
-static uint32_t history_next;
+#define HISTORY_MAGIC 0x5A534C48u /* "ZSLH" */
+
+/* Line number n (counting every committed line) lives in lines[n % HISTORY_LEN] until it is
+ * overwritten; next is the number the next committed line gets. */
+struct history_store {
+    uint32_t magic;
+    uint32_t next;
+    uint32_t next_check; /* ~next; a mismatch means RAM was not retained */
+    char lines[HISTORY_LEN][LINE_MAX];
+};
+
+#if IS_ENABLED(CONFIG_ZMK_STUDIO_LOG_RETAIN_HISTORY)
+/* Not cleared at boot, so the lines before a crash or watchdog reset are still here. */
+static __noinit struct history_store hist;
+#else
+static struct history_store hist;
+#endif
+
 /* Replay sends lines [replay_next, replay_end), oldest first. */
 static uint32_t replay_next;
 static uint32_t replay_end;
@@ -128,8 +145,9 @@ static void commit_line(void) {
     assembling_len = 0;
 
 #if HISTORY_LEN > 0
-    memcpy(history[history_next % HISTORY_LEN], assembling, LINE_MAX);
-    history_next++;
+    memcpy(hist.lines[hist.next % HISTORY_LEN], assembling, LINE_MAX);
+    hist.next++;
+    hist.next_check = ~hist.next;
 #endif
 
     if (!atomic_get(&streaming) || atomic_get(&panicked)) {
@@ -166,12 +184,12 @@ static bool next_replay_line(char *out) {
     k_spinlock_key_t key = k_spin_lock(&line_lock);
 
     /* Lines committed since replay began may have overwritten the oldest ones; skip those. */
-    uint32_t oldest = history_next > HISTORY_LEN ? history_next - HISTORY_LEN : 0;
+    uint32_t oldest = hist.next > HISTORY_LEN ? hist.next - HISTORY_LEN : 0;
     if (replay_next < oldest) {
         replay_next = oldest;
     }
     if (replay_next < replay_end) {
-        memcpy(out, history[replay_next % HISTORY_LEN], LINE_MAX);
+        memcpy(out, hist.lines[replay_next % HISTORY_LEN], LINE_MAX);
         more = true;
     }
 
@@ -233,15 +251,19 @@ static void set_streaming(bool on) {
         return;
     }
 
-    char hello[48];
-    snprintk(hello, sizeof(hello), "zmk_studio_log v%d history=%d line_max=%d",
-             ZMK_STUDIO_LOG_PROTOCOL_VERSION, HISTORY_LEN, LINE_MAX);
+    /* The flags tell the configurator which optional features this firmware has. */
+    char hello[96];
+    snprintk(hello, sizeof(hello),
+             "zmk_studio_log v%d history=%d line_max=%d retained=%d blackbox=%d",
+             ZMK_STUDIO_LOG_PROTOCOL_VERSION, HISTORY_LEN, LINE_MAX,
+             IS_ENABLED(CONFIG_ZMK_STUDIO_LOG_RETAIN_HISTORY),
+             IS_ENABLED(CONFIG_ZMK_STUDIO_LOG_BLACK_BOX));
     (void)send_line(hello);
 
     k_spinlock_key_t key = k_spin_lock(&line_lock);
 #if HISTORY_LEN > 0
-    replay_end = history_next;
-    replay_next = history_next > HISTORY_LEN ? history_next - HISTORY_LEN : 0;
+    replay_end = hist.next;
+    replay_next = hist.next > HISTORY_LEN ? hist.next - HISTORY_LEN : 0;
 #endif
     /* Lines committed from here on are queued; older ones come from the replay. */
     k_msgq_purge(&studio_log_q);
@@ -249,6 +271,12 @@ static void set_streaming(bool on) {
     k_spin_unlock(&line_lock, key);
 
     (void)k_work_schedule(&flush_work, K_NO_WAIT);
+}
+
+void zmk_studio_log_start_streaming(void) {
+    if (transport_allowed()) {
+        set_streaming(true);
+    }
 }
 
 static void control_frame_cb(const uint8_t *payload, size_t len) {
@@ -323,6 +351,26 @@ static const struct log_backend_api studio_log_backend_api = {
 };
 
 LOG_BACKEND_DEFINE(zmk_studio_log_backend, studio_log_backend_api, true);
+#endif
+
+#if HISTORY_LEN > 0
+/* Runs before anything can log, so a retained history is checked before it is appended to. */
+static int history_init(void) {
+    if (hist.magic == HISTORY_MAGIC && hist.next_check == ~hist.next) {
+        /* Retained across a restart. Re-terminate every slot in case one was mid-write. */
+        for (size_t i = 0; i < HISTORY_LEN; i++) {
+            hist.lines[i][LINE_MAX - 1] = '\0';
+        }
+        return 0;
+    }
+
+    memset(&hist, 0, sizeof(hist));
+    hist.magic = HISTORY_MAGIC;
+    hist.next_check = ~hist.next;
+    return 0;
+}
+
+SYS_INIT(history_init, PRE_KERNEL_1, 0);
 #endif
 
 static int studio_log_init(void) {

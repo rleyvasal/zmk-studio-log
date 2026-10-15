@@ -61,4 +61,91 @@ config ZMK_STUDIO_LOG_USB_ONLY
 	  Keeps log frames off Bluetooth, where they would compete with keyboard
 	  HID reports for airtime.
 
+menuconfig ZMK_STUDIO_LOG_RESTART_DIAG
+	bool "Restart diagnostics"
+	help
+	  Help explain unexpected restarts. Each part below can be turned off.
+	  Everything is kept in RAM that is not cleared at boot, so it survives a
+	  crash, watchdog or reset-button restart, but not a power loss or a flat
+	  battery; use ZMK_STUDIO_LOG_BLACK_BOX for those.
+
+if ZMK_STUDIO_LOG_RESTART_DIAG
+
+config ZMK_STUDIO_LOG_RESET_REASON
+	bool "Print why the keyboard last restarted"
+	default y
+	select HWINFO
+	help
+	  At boot, prints "zmk_diag boot #<n> reset=<causes>" from the chip's reset
+	  cause register (power-on, reset pin, software, watchdog, brownout, ...),
+	  then clears it so the next boot reports only its own cause.
+
+config ZMK_STUDIO_LOG_RETAIN_HISTORY
+	bool "Keep the log history across restarts"
+	default y
+	depends on ZMK_STUDIO_LOG_HISTORY > 0
+	help
+	  The last ZMK_STUDIO_LOG_HISTORY lines survive a restart, so enabling the
+	  log after a reboot shows what happened just before it.
+
+config ZMK_STUDIO_LOG_FAULT_CAPTURE
+	bool "Record crashes and reboot"
+	default y
+	select THREAD_NAME
+	help
+	  Replaces Zephyr's fatal error handler. On a crash it saves the reason,
+	  program counter, link register and thread, then reboots instead of
+	  halting; the next boot prints "zmk_diag fault ...". Find the source line
+	  with: arm-zephyr-eabi-addr2line -e zephyr/zmk.elf <pc>
+
+endif
+
+menuconfig ZMK_STUDIO_LOG_BLACK_BOX
+	bool "Black box: keep recent keyboard events in flash"
+	depends on SETTINGS
+	help
+	  Records boots, crashes, USB, Bluetooth connections and disconnections,
+	  profile and output changes, split link changes, battery level and
+	  sleep in a small RAM ring, and saves them to flash in batches, so the
+	  history survives a power loss. "Load retained log" in the configurator
+	  (a 'D' '1' frame) prints it. Other code can add events with
+	  zmk_studio_log_diag_record().
+
+	  Each save is one flash write; saves only happen when there are new
+	  events, and never more often than ZMK_STUDIO_LOG_BLACK_BOX_SAVE_MIN_SECONDS.
+
+if ZMK_STUDIO_LOG_BLACK_BOX
+
+config ZMK_STUDIO_LOG_BLACK_BOX_RING
+	int "Events kept in RAM"
+	default 64
+	range 16 256
+	help
+	  Unsaved events also survive a non-power-loss restart, and are saved
+	  right after the next boot. 16 bytes each.
+
+config ZMK_STUDIO_LOG_BLACK_BOX_BLOCK
+	int "Events per flash save"
+	default 16
+	range 4 32
+
+config ZMK_STUDIO_LOG_BLACK_BOX_SLOTS
+	int "Saved blocks kept in flash"
+	default 8
+	range 2 32
+	help
+	  Flash keeps the newest SLOTS x BLOCK events (128 by default).
+
+config ZMK_STUDIO_LOG_BLACK_BOX_SAVE_MIN_SECONDS
+	int "Minimum seconds between flash saves"
+	default 60
+	range 5 3600
+
+config ZMK_STUDIO_LOG_BLACK_BOX_SAVE_IDLE_SECONDS
+	int "Save a partial block after this many quiet seconds"
+	default 300
+	range 30 86400
+
+endif
+
 endif
