@@ -273,9 +273,9 @@ static void set_streaming(bool on) {
     (void)k_work_schedule(&flush_work, K_NO_WAIT);
 }
 
-void zmk_studio_log_start_streaming(void) {
-    if (transport_allowed()) {
-        set_streaming(true);
+void zmk_studio_log_set_streaming(bool on) {
+    if (!on || transport_allowed()) {
+        set_streaming(on);
     }
 }
 

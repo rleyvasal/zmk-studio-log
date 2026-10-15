@@ -29,6 +29,12 @@
 bool zmk_studio_log_is_streaming(void);
 
 /**
+ * Turn the live stream on or off, as a 'C' '1' or 'C' '0' frame from the host would. Use it to
+ * follow a reply to some other host request with the live log.
+ */
+void zmk_studio_log_set_streaming(bool on);
+
+/**
  * Send one line right away, bypassing the live queue. Unlike printk(), this works even while the
  * stream is off, as long as a configurator is connected, so it suits replies to host requests
  * such as a diagnostic dump.

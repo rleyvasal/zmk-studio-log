@@ -486,7 +486,7 @@ static void dump_work_cb(struct k_work *work) {
     (void)dump_send(line);
 
     /* Follow the dump with the live log, as the configurator expects. */
-    zmk_studio_log_start_streaming();
+    zmk_studio_log_set_streaming(true);
 }
 
 static void dump_frame_cb(const uint8_t *payload, size_t len) {

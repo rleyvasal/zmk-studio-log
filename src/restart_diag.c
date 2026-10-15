@@ -16,6 +16,7 @@
  * reset.
  */
 
+#include <errno.h>
 #include <string.h>
 
 #include <zephyr/fatal.h>
@@ -55,6 +56,12 @@ struct fault_record {
 };
 
 static __noinit struct fault_record fault_rec;
+
+/* This boot's findings, kept for zmk_studio_log_reset_cause() / zmk_studio_log_boot_fault(). */
+static int boot_cause_err = -ENOTSUP;
+static uint32_t boot_cause;
+static bool boot_fault_valid;
+static struct zmk_studio_log_fault boot_fault;
 
 static uint32_t fault_check(const struct fault_record *r) {
     const uint32_t *w = (const uint32_t *)r;
@@ -135,6 +142,16 @@ static void report_fault(void) {
            fault_rec.reason, fault_reason_name(fault_rec.reason), fault_rec.pc, fault_rec.lr,
            fault_rec.thread_name, fault_rec.thread, fault_rec.uptime_ms);
 
+    boot_fault = (struct zmk_studio_log_fault){
+        .reason = fault_rec.reason,
+        .pc = fault_rec.pc,
+        .lr = fault_rec.lr,
+        .uptime_ms = fault_rec.uptime_ms,
+        .thread = fault_rec.thread,
+    };
+    memcpy(boot_fault.thread_name, fault_rec.thread_name, sizeof(boot_fault.thread_name));
+    boot_fault_valid = true;
+
     zmk_studio_log_diag_record(ZMK_DIAG_FAULT, (uint8_t)fault_rec.reason,
                                (uint8_t)MIN(fault_rec.uptime_ms / 1000, UINT8_MAX), fault_rec.pc);
     zmk_studio_log_diag_record(ZMK_DIAG_FAULT_LR, 0, 0, fault_rec.lr);
@@ -156,6 +173,20 @@ static uint32_t next_boot_number(void) {
 
 uint32_t zmk_studio_log_boot_number(void) {
     return boot_rec.magic == BOOT_MAGIC && boot_rec.check == ~boot_rec.count ? boot_rec.count : 0;
+}
+
+int zmk_studio_log_reset_cause(uint32_t *cause) {
+    if (boot_cause_err == 0) {
+        *cause = boot_cause;
+    }
+    return boot_cause_err;
+}
+
+bool zmk_studio_log_boot_fault(struct zmk_studio_log_fault *out) {
+    if (boot_fault_valid) {
+        *out = boot_fault;
+    }
+    return boot_fault_valid;
 }
 
 #if IS_ENABLED(CONFIG_ZMK_STUDIO_LOG_RESET_REASON)
@@ -210,6 +241,8 @@ static int restart_diag_init(void) {
     char causes[96];
     int err = hwinfo_get_reset_cause(&cause);
 
+    boot_cause_err = err;
+    boot_cause = cause;
     if (err) {
         printk("zmk_diag boot #%u reset=unavailable err=%d\n", boot, err);
     } else {
