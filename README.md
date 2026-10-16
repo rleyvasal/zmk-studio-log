@@ -158,6 +158,27 @@ zmk_studio_log_diag_record(0x80, my_state, my_reason, my_value);
 been saved yet. Only the half that runs Studio, the central half of a split,
 records anything.
 
+## Battery snapshots
+
+With battery reporting on, the keyboard also sends a `K` frame with both
+halves' levels every 10 seconds while a host has the Studio port open, and one
+right away when the host sends `G` `1`, so a battery app can open the port, ask
+and close again. The text looks like:
+
+| Text | Meaning |
+|---|---|
+| `left=78 right=15` | Both on battery |
+| `left=78 usb right=15` | The left half is on USB, charging; 78 is its last level on battery, or an estimate |
+| `left=100 usb full right=15` | The left half's charger reports the charge complete |
+| `left=usb right=--` | On USB with no level known yet; the right half has not reported |
+
+On a split, `left` is the central and `right` the first peripheral; a keyboard
+without a split sends only `left=`. With upstream ZMK the level on USB is `usb`,
+because the cell sits at charge voltage. A ZMK with
+`CONFIG_ZMK_BATTERY_CHARGE_STATE_API` reports the remembered or estimated level
+and `full` instead, and with `CONFIG_ZMK_BATTERY_CHARGE_STATUS` the right half's
+charge state as well.
+
 ## Options
 
 | Kconfig | Default | |
@@ -165,6 +186,8 @@ records anything.
 | `ZMK_STUDIO_LOG_PRINTK` | `y` | Capture `printk()`. Replaces any other printk hook, such as a UART console. |
 | `ZMK_STUDIO_LOG_BACKEND` | `y` if `LOG` | Capture Zephyr logging as text. |
 | `ZMK_STUDIO_LOG_USB_ONLY` | `y` | Never stream over Bluetooth, where log traffic competes with key reports. |
+| `ZMK_STUDIO_LOG_BATTERY` | `y` with battery reporting | `K` battery snapshots, as above. |
+| `ZMK_STUDIO_LOG_BATTERY_INTERVAL_SEC` | `10` | Seconds between snapshots. |
 | `ZMK_STUDIO_LOG_HISTORY` | `32` | Lines kept for replay when the stream starts; `0` disables replay. |
 | `ZMK_STUDIO_LOG_QUEUE` | `16` | Lines buffered while streaming; when full, new lines are dropped. |
 | `ZMK_STUDIO_LOG_LINE_MAX` | `120` | Longer lines are split. |
@@ -194,6 +217,8 @@ proto3 never produces, so they can't be mistaken for RPC messages.
 | host → keyboard | `C` `0` | Stream off; the keyboard answers `L zmk_studio_log off` |
 | host → keyboard | `D` `1` | Black box dump (`zmk_diag ...` lines), then the live log; needs `ZMK_STUDIO_LOG_BLACK_BOX` |
 | keyboard → host | `L` *text* | One log line, UTF-8, no newline |
+| host → keyboard | `G` `1` | Send a battery snapshot now; needs `ZMK_STUDIO_LOG_BATTERY` |
+| keyboard → host | `K` *text* | Battery snapshot, as above |
 
 Firmware without this module ignores `C` frames. A host should therefore treat
 "no `zmk_studio_log` hello after enabling" as "not supported".
@@ -204,7 +229,7 @@ Other modules can reuse the transport:
 #include <zmk_studio_log/studio_log.h>
 
 zmk_studio_log_send_line("my_feature ready");       /* works even with the stream off */
-zmk_studio_log_send_frame('K', data, len);          /* your own frame type */
+zmk_studio_log_send_frame('S', data, len);          /* your own frame type */
 ```
 
 They can also handle their own host requests:
@@ -212,6 +237,6 @@ They can also handle their own host requests:
 ```c
 #include <zmk/studio/rpc.h>
 
-static void on_frame(const uint8_t *payload, size_t len) { /* payload[0] == 'G' */ }
-ZMK_RPC_RAW_FRAME_HANDLER(my_handler, 'G', on_frame);
+static void on_frame(const uint8_t *payload, size_t len) { /* payload[0] == 'N' */ }
+ZMK_RPC_RAW_FRAME_HANDLER(my_handler, 'N', on_frame);
 ```

@@ -61,6 +61,21 @@ config ZMK_STUDIO_LOG_USB_ONLY
 	  Keeps log frames off Bluetooth, where they would compete with keyboard
 	  HID reports for airtime.
 
+config ZMK_STUDIO_LOG_BATTERY
+	bool "Battery snapshots for a host battery app ('K' frames)"
+	default y
+	depends on ZMK_BATTERY_REPORTING
+	help
+	  Sends a 'K' frame such as "left=78 usb right=15" to the host every
+	  ZMK_STUDIO_LOG_BATTERY_INTERVAL_SEC, and one right away when the host
+	  sends 'G' '1'. On a split central, right is the first peripheral.
+	  Independent of the log stream; follows ZMK_STUDIO_LOG_USB_ONLY.
+
+config ZMK_STUDIO_LOG_BATTERY_INTERVAL_SEC
+	int "Seconds between battery snapshots"
+	default 10
+	depends on ZMK_STUDIO_LOG_BATTERY
+
 menuconfig ZMK_STUDIO_LOG_RESTART_DIAG
 	bool "Restart diagnostics"
 	help
