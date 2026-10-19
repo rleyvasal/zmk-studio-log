@@ -42,8 +42,7 @@
 #include "internal.h"
 
 #ifndef ZMK_RPC_RAW_FRAME_HANDLER
-#error                                                                                             \
-    "zmk-studio-log needs a ZMK with Studio raw frames; apply patches/0001-studio-raw-frames.patch"
+#error "zmk-studio-log needs ZMK Next (rleyvasal/zmk-next) with CONFIG_ZMK_STUDIO_RPC_RAW_FRAMES"
 #endif
 
 BUILD_ASSERT(ZMK_RPC_RAW_FRAME_PREFIX_VALID(ZMK_STUDIO_LOG_PREFIX_LINE));

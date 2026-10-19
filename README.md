@@ -14,34 +14,33 @@ sent, but the last 32 lines are kept so boot messages show up when you connect.
 
 ## Requirements
 
-1. **ZMK with Studio raw frames.** Upstream ZMK does not have them yet. Apply
-   [`patches/0001-studio-raw-frames.patch`](patches/0001-studio-raw-frames.patch)
-   to your ZMK tree. It applies cleanly to ZMK `main` (2026-10-09, `4dd95d78`)
-   and `v0.3.0`. Without it, the build stops with an error that names this patch.
-2. **ZMK Studio over USB**: `CONFIG_ZMK_STUDIO=y` and the `studio-rpc-usb-uart`
-   snippet.
+1. **[ZMK Next](https://github.com/rleyvasal/zmk-next)**, which has Studio raw
+   frames (`CONFIG_ZMK_STUDIO_RPC_RAW_FRAMES`). This module turns them on for
+   you. Upstream ZMK does not have them; building against it stops with an
+   error that says so.
+2. **ZMK Studio over USB** on the half that talks to the computer. ZMK Next's
+   `zmk-next` snippet sets this up.
 
 ## Setup
 
-### 1. Use a ZMK that has the patch
+### 1. Add ZMK Next and this module to `config/west.yml`
 
-Push the patch to a branch of your own ZMK fork, then point `config/west.yml`
-at it:
+Follow ZMK Next's [quick start](https://github.com/rleyvasal/zmk-next/blob/main/docs/quick-start.md)
+for the `zmk` entry, then add this module next to it:
 
 ```yaml
 manifest:
   remotes:
-    - name: zmkfirmware
-      url-base: https://github.com/zmkfirmware
-    - name: you
-      url-base: https://github.com/<your-github-user>
+    - name: zmk-next
+      url-base: https://github.com/rleyvasal
   projects:
     - name: zmk
-      remote: you
-      revision: studio-raw-frames # branch with the patch applied
+      remote: zmk-next
+      repo-path: zmk-next
+      revision: main # until a release newer than v0.2.1 is tagged
       import: app/west.yml
     - name: zmk-studio-log
-      remote: you
+      remote: zmk-next
       revision: main
   self:
     path: config
@@ -52,17 +51,17 @@ manifest:
 In `config/<keyboard>.conf`:
 
 ```ini
-CONFIG_ZMK_STUDIO=y
 CONFIG_ZMK_STUDIO_LOG=y
 ```
 
-In `build.yaml`, on the half that talks to the computer (the central half of a split):
+In `build.yaml`, on the half that talks to the computer (the central half of a
+split), use the `zmk-next` snippet:
 
 ```yaml
 include:
   - board: nice_nano
     shield: corne_left
-    snippet: studio-rpc-usb-uart
+    snippet: zmk-next
 ```
 
 Optional: also capture Zephyr logging.
@@ -171,13 +170,14 @@ and close again. The text looks like:
 | `left=78 usb right=15` | The left half is on USB, charging; 78 is its last level on battery, or an estimate |
 | `left=100 usb full right=15` | The left half's charger reports the charge complete |
 | `left=usb right=--` | On USB with no level known yet; the right half has not reported |
+| `left=97 usb right=100 mv=4192` | `mv=` is the left half's battery voltage in millivolts, when the board reports one |
 
 On a split, `left` is the central and `right` the first peripheral; a keyboard
-without a split sends only `left=`. With upstream ZMK the level on USB is `usb`,
-because the cell sits at charge voltage. A ZMK with
-`CONFIG_ZMK_BATTERY_CHARGE_STATE_API` reports the remembered or estimated level
-and `full` instead, and with `CONFIG_ZMK_BATTERY_CHARGE_STATUS` the right half's
-charge state as well.
+without a split sends only `left=`. Turn on
+`CONFIG_ZMK_BATTERY_HOLD_ON_EXTERNAL_POWER` for the `usb` and `full` markers and
+the remembered or estimated level while charging; without it, the level on USB
+is the live reading, which runs high because the cell sits at charge voltage.
+`CONFIG_ZMK_BATTERY_CHARGE_STATUS` adds the right half's charge state as well.
 
 ## Options
 
@@ -196,8 +196,8 @@ charge state as well.
 | `ZMK_STUDIO_LOG_BLACK_BOX_RING` / `_BLOCK` / `_SLOTS` | `64` / `16` / `8` | Events in RAM, events per save, saved blocks kept. |
 | `ZMK_STUDIO_LOG_BLACK_BOX_SAVE_MIN_SECONDS` / `_SAVE_IDLE_SECONDS` | `60` / `300` | Fastest save rate, and when a partial block is saved. |
 
-Measured on nice!nano + Corne left with Studio over USB, compared with the
-patch alone:
+Measured on nice!nano + Corne left with Studio over USB, compared with Studio
+and raw frames alone:
 
 - log stream only: about +1.6 KB flash, +6 KB RAM
 - with restart diagnostics: +1.4 KB flash, +0.5 KB RAM on top of that
