@@ -3,14 +3,15 @@
 menuconfig ZMK_STUDIO_LOG
 	bool "Stream firmware logs to the configurator over the ZMK Studio connection"
 	depends on ZMK_STUDIO
+	select ZMK_STUDIO_RPC_RAW_FRAMES
 	help
 	  Captures printk() and, when logging is enabled, Zephyr LOG_* output, and
 	  sends each line to a connected configurator as an 'L' raw frame on the
 	  Studio RPC transport, so no second serial port is needed. Nothing is sent
 	  until the host turns the stream on with a 'C' '1' frame.
 
-	  Requires a ZMK tree with zmk_rpc_send_raw_frame(); see
-	  patches/0001-studio-raw-frames.patch in this module.
+	  Requires ZMK Next, whose Studio raw frames (ZMK_STUDIO_RPC_RAW_FRAMES)
+	  this turns on.
 
 if ZMK_STUDIO_LOG
 

@@ -7,9 +7,9 @@
  * frame every CONFIG_ZMK_STUDIO_LOG_BATTERY_INTERVAL_SEC, and one right away
  * when the host sends 'G' '1', so an app can open the port, ask, and close.
  *
- * Works on upstream ZMK. A ZMK with CONFIG_ZMK_BATTERY_CHARGE_STATE_API also
- * reports the cell level while charging and "full"; one with
- * CONFIG_ZMK_BATTERY_CHARGE_STATUS also the peripheral's charge state.
+ * With CONFIG_ZMK_BATTERY_HOLD_ON_EXTERNAL_POWER it also reports the cell level
+ * while charging and "full"; with CONFIG_ZMK_BATTERY_CHARGE_STATUS also the
+ * peripheral's charge state.
  */
 
 #include <errno.h>
