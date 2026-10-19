@@ -20,6 +20,9 @@ struct zmk_studio_log_battery_half {
     bool powered;
     /* The charger reports the charge complete. */
     bool full;
+    /* Last measured battery voltage in millivolts, or 0 when not known. Only this
+     * (central) half's is known; a peripheral reports a level only. */
+    int millivolts;
 };
 
 /*
@@ -28,6 +31,9 @@ struct zmk_studio_log_battery_half {
  * "78" on battery, "78 usb" while charging, "100 usb full" when full, "usb" on
  * power with no level known, and "--" when it has not reported. On a split, the
  * central is called left and peripheral 0 right, as on most splits.
+ * When left's millivolts are known, " mv=<millivolts>" ends the line, for example
+ * "left=78 usb right=15 mv=4123". Readers that only look for left= and right=
+ * are unaffected.
  *
  * Returns the length written, or a negative error.
  */
