@@ -53,11 +53,19 @@ int zmk_studio_log_battery_format(char *buf, size_t cap,
         return -EINVAL;
     }
     format_half(l, sizeof(l), left);
-    if (!right) {
-        return snprintk(buf, cap, "left=%s", l);
+    if (right) {
+        format_half(r, sizeof(r), right);
     }
-    format_half(r, sizeof(r), right);
-    return snprintk(buf, cap, "left=%s right=%s", l, r);
+
+    char mv[16] = "";
+
+    if (left->millivolts > 0) {
+        snprintk(mv, sizeof(mv), " mv=%d", left->millivolts);
+    }
+    if (!right) {
+        return snprintk(buf, cap, "left=%s%s", l, mv);
+    }
+    return snprintk(buf, cap, "left=%s right=%s%s", l, r, mv);
 }
 
 #if HAS_PERIPHERAL
@@ -76,6 +84,8 @@ static struct zmk_studio_log_battery_half local_half(void) {
     if (half.powered && zmk_battery_last_cell_soc() < 0) {
         half.level = -1;
     }
+    /* ZMK Next exposes the last ADC reading next to the charge state API. */
+    half.millivolts = zmk_battery_millivolts();
 #else
     /* Without ZMK's cell tracking, a reading on USB is only charge voltage. */
 #if IS_ENABLED(CONFIG_ZMK_USB)

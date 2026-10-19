@@ -17,7 +17,7 @@ HARNESS = r"""
 typedef struct zmk_studio_log_battery_half half;
 static int failures;
 static void expect(const half *left, const half *right, const char *want) {
-    char line[64];
+    char line[80];
     zmk_studio_log_battery_format(line, sizeof(line), left, right);
     if (strcmp(line, want) != 0) {
         fprintf(stderr, "got \"%s\", want \"%s\"\n", line, want);
@@ -40,6 +40,13 @@ int main(void) {
     expect(&on_battery, &right_charging, "left=78 right=15 usb");
     expect(&charging, &full, "left=78 usb right=100 usb full");
     expect(&on_battery, NULL, "left=78"); /* not a split */
+
+    /* This half's voltage, when known, ends the line. */
+    half charging_mv = {.level = 48, .powered = true, .millivolts = 3987};
+    half on_battery_mv = {.level = 78, .millivolts = 3891};
+    expect(&charging_mv, &right_charging, "left=48 usb right=15 usb mv=3987");
+    expect(&on_battery_mv, &not_reported, "left=78 right=-- mv=3891");
+    expect(&on_battery_mv, NULL, "left=78 mv=3891");
 
     char small[8];
     if (zmk_studio_log_battery_format(small, sizeof(small), NULL, NULL) != -EINVAL) {
