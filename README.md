@@ -37,17 +37,20 @@ manifest:
     - name: zmk
       remote: zmk-next
       repo-path: zmk-next
-      revision: v0.2
+      revision: v0.2-branch
       import: app/west.yml
     - name: zmk-studio-log
       remote: zmk-next
-      revision: v0.1
+      revision: v0.1-branch
   self:
     path: config
 ```
 
-`v0.2` and `v0.1` move to each patch release, so rebuilds pick up fixes without
-changing the protocol. Pin an exact release (`v0.1.0`) for builds that never change.
+`v0.2-branch` and `v0.1-branch` move to each patch release, so rebuilds pick up
+fixes without changing the protocol. Pin the branches rather than the `v0.2` and
+`v0.1` tags: west does not fetch a tag it already has, so a build that reuses a
+cached west workspace (GitHub Actions) would stay on its first release. Pin an
+exact release (`v0.1.0`) for builds that never change.
 
 ### 2. Enable it
 
