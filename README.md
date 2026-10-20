@@ -37,14 +37,17 @@ manifest:
     - name: zmk
       remote: zmk-next
       repo-path: zmk-next
-      revision: main # until a release newer than v0.2.1 is tagged
+      revision: v0.2
       import: app/west.yml
     - name: zmk-studio-log
       remote: zmk-next
-      revision: main
+      revision: v0.1
   self:
     path: config
 ```
+
+`v0.2` and `v0.1` move to each patch release, so rebuilds pick up fixes without
+changing the protocol. Pin an exact release (`v0.1.0`) for builds that never change.
 
 ### 2. Enable it
 
