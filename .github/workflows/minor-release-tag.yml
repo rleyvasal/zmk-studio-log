@@ -1,7 +1,11 @@
-name: Minor release tag
+name: Release line
 
-# Moves the minor tag (v0.1) to each patch release (v0.1.1) when it is
-# published, so configs that pin the minor tag get it on their next build.
+# Moves the release line (the v0.1-branch branch and the v0.1 tag) to each
+# patch release (v0.1.1) when it is published, so configs that pin the release
+# line get it on their next build. Configs pin the branch: west skips fetching
+# a tag it already has, so builds that restore a cached west workspace (ZMK's
+# build-user-config.yml) never see a moved tag. The tag is kept for configs
+# that pinned it earlier.
 
 on:
   release:
@@ -18,7 +22,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Move the minor tag
+      - name: Move the release line
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: |
@@ -32,6 +36,9 @@ jobs:
             echo "$TAG is older than $latest; leaving $minor alone."
             exit 0
           fi
+          # Branch first, fast-forward only: a release line never rewinds, and
+          # a rejected push leaves the tag alone too.
+          git push origin "$(git rev-parse "$TAG^{commit}"):refs/heads/${minor}-branch"
           git tag -f "$minor" "$TAG^{commit}"
           git push -f origin "refs/tags/$minor"
           echo "$minor -> $TAG"
